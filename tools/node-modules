@@ -1,0 +1,262 @@
+#!/bin/sh
+
+# shellcheck disable=SC3043         # local is not POSIX, but every shell has it
+# shellcheck disable=SC3013,SC3045  # ditto for test {-nt,-t}
+
+GITHUB_REPO='node-cache'
+SUBDIR='node_modules'
+
+V="${V-0}" # default to friendly messages
+
+set -eu
+cd "${0%/*}/.."
+# shellcheck source-path=SCRIPTDIR/..
+. test/common/git-utils.sh
+
+cmd_remove() {
+    # if we did this for ourselves the rm is enough, but it might be the case
+    # that someone actually used git-submodule to fetch this, so clean up after
+    # that as well.  NB: deinit nicely recreates the empty directory for us.
+    message REMOVE node_modules
+    rm -rf node_modules
+    git submodule deinit node_modules
+    rm -rf -- "$(git rev-parse --absolute-git-dir)/modules/node_modules"
+}
+
+cmd_checkout() {
+    # we default to check out the node_modules corresponding to the gitlink in the index
+    local force=""
+    if [ "${1-}" = "--force" ]; then
+        force="1"
+        shift
+    fi
+
+    local sha="${1-$(get_index_gitlink node_modules)}"
+
+    # fetch by sha to prevent us from downloading something we don't want
+    fetch_sha_to_cache "${sha}"
+
+    # verify that our package.json is equal to the one the cached node_modules
+    # was created with, unless --force is given
+    if [ -z "$force" ]; then
+        if ! cmp_from_cache "${sha}" '.package.json' 'package.json'; then
+            cat >&2 <<EOF
+
+*** node_modules ${sha} doesn't match our package.json
+*** refusing to automatically check out node_modules
+
+Options:
+
+    - tools/node-modules checkout --force     # disable this check
+
+    - tools/node-modules install              # npm install with our package.json
+
+$0: *** aborting
+
+EOF
+            exit 1
+        fi
+    fi
+
+    # we're actually going to do this; let's remove the old one
+    cmd_remove
+
+    # and check out the new one
+    # we need to use the tag name here, unfortunately
+    clone_from_cache "${sha}"
+}
+
+cmd_install() {
+    test -e bots || test/common/make-bots
+
+    # We first read the result directly into the cache, then we unpack it.
+    tree="$(bots/npm download < package.json | tar_to_cache)"
+    commit="$(sha256sum package.json | git_cache commit-tree "${tree}")"
+    git_cache tag "sha-${commit}" "${commit}" "--no-sign"
+    cmd_checkout "${commit}"
+
+    cat <<EOF
+Next steps:
+
+  - git add node_modules && git commit
+  - tools/node-modules push
+
+EOF
+}
+
+cmd_push() {
+    # push via the cache: the shared history with the remote helps to thin out the pack we send
+    tag="sha-$(git -C node_modules rev-parse HEAD)"
+    message PUSH "${GITHUB_REPO} ${tag}"
+    git_cache push "${SSH_REMOTE}" "${tag}"
+}
+
+cmd_verify() {
+    test -e bots || test/common/make-bots
+
+    # Verifies that the package.json and node_modules of the given commit match.
+    commit="$(git rev-parse "$1:node_modules")"
+    fetch_sha_to_cache "${commit}"
+
+    committed_tree="$(git_cache rev-parse "${commit}^{tree}")"
+    expected_tree="$(git cat-file blob "$1:package.json" | bots/npm download | tar_to_cache)"
+
+    if [ "${committed_tree}" != "${expected_tree}" ]; then
+        exec >&2
+        printf "\nCommit %s package.json and node_modules aren't in sync!\n\n" "$1"
+        git --no-pager show --stat "$1"
+
+        printf "\nThe above commit refers to the following node_modules commit:\n\n"
+        git_cache --no-pager show --no-patch "${commit}"
+
+        printf "\nOur attempt to recreate that commit differs as follows:\n\n"
+        git_cache --no-pager diff --stat "${commit}" "${expected_tree}" --
+        git_cache --no-pager diff "${commit}" "${expected_tree}" -- .package-lock.json
+        exit 1
+    fi
+}
+
+cmd_runtime_tar() {
+    if [ -z "${1:-}" ]; then
+        echo "Usage: $0 runtime-tar <tarball-path>" >&2
+        exit 1
+    fi
+    if [ ! -e node_modules/.package-lock.json ]; then
+        echo "Error: This requires a checked out node_modules, run 'tools/node-modules checkout' first" >&2
+        exit 1
+    fi
+    local tar_path="$1"
+
+    # Verify lockfile version
+    local lockfile_version
+    lockfile_version="$(jq -r '.lockfileVersion' node_modules/.package-lock.json)"
+    if [ "$lockfile_version" != "3" ]; then
+        echo "Error: this code is only certified for lockfileVersion 3, got $lockfile_version" >&2
+        exit 1
+    fi
+
+    # Collect runtime packages using jq, excluding:
+    #  - devDependencies
+    #  - esbuild (arch dependent, must use distribution packages)
+    #  - unnecessary binary packages (use JavaScript sass, don't need watcher)
+    local runtime_pkgs
+    runtime_pkgs="$(jq -r '
+        .packages | to_entries[] |
+        select(.value.dev != true) |
+        .key |
+        select(test(".*/@?esbuild(/|$)") | not) |
+        select(test("watcher-linux|sass-embedded") | not)
+    ' node_modules/.package-lock.json | while read -r pkg; do
+        # Only include if exists and is not empty
+        [ -n "$(ls -A "$pkg" 2>/dev/null)" ] && echo "$pkg"
+    done)"
+
+    # Validate that we only have architecture independent files
+    # special-case node_modules/iconv-lite/encodings/sbcs-data-generated.js, it's JS with binary strings in it
+    # and resolve/test/resolver/cup.coffee which is a single-byte test file
+    # Ubuntu 24.04's file (or at least not that in the GitHub actions runner) does not detect *.woff2 file type properly
+    # react-dropzone 14.4.0 started to include a dist tarball (https://github.com/react-dropzone/react-dropzone/issues/1447)
+    for pkg in $runtime_pkgs; do
+        if find "$pkg" -type f ! -path '*/dist/react-dropzone*.tgz' -print0 |
+           xargs -0 file --mime |
+           grep -Ev \
+               -e 'text/' \
+               -e 'inode/x-empty' \
+               -e 'application/(javascript|json)' \
+               -e 'font/' \
+               -e 'image/' \
+               -e 'sbcs-data-generated.js' \
+               -e 'cup.coffee' \
+               -e '\.woff'; then
+            echo "Error: package '$pkg' contains architecture dependent files, cannot include in runtime tarball" >&2
+            exit 1
+        fi
+    done
+
+    # Create tarball
+    {
+        echo "node_modules/.package-lock.json"
+        echo "$runtime_pkgs"
+    } | tar --format=ustar --sort=name --owner=root:0 --group=root:0 --xz -cf "$tar_path" -C . -T -
+}
+
+# called from Makefile.am
+cmd_make_package_lock_json() {
+    # Run from make to ensure package-lock.json is up to date
+
+    # package-lock.json is used as the stamp file for all things that use
+    # node_modules, so this is the main bit of glue that drives the entire process
+
+    # We try our best not to touch package-lock.json unless it actually changes
+
+    # This isn't going to work for a tarball, but as long as
+    # package-lock.json is already there, and newer than package.json,
+    # we're OK
+    if [ ! -e .git ]; then
+        if [ package-lock.json -nt package.json ]; then
+            exit 0
+        fi
+
+        echo "*** Can't update node modules unless running from git" >&2
+        exit 1
+    fi
+
+    # Otherwise, our main goal is to ensure that the node_modules from
+    # the index is the one that we actually have.
+    local sha
+    sha="$(get_index_gitlink node_modules)"
+    if [ ! -e node_modules/.git ]; then
+        # nothing there yet...
+        cmd_checkout
+    elif [ "$(git -C node_modules rev-parse HEAD)" != "${sha}" ]; then
+        # wrong thing there...
+        cmd_checkout
+    fi
+
+    # This check is more about catching local changes to package.json than
+    # about validating something we just checked out:
+    if ! cmp -s node_modules/.package.json package.json; then
+        cat 2>&1 <<EOF
+*** package.json is out of sync with node_modules
+*** If you modified package.json, please run:
+***
+***    tools/node-modules install
+***
+*** and add the result to the index.
+EOF
+        exit 1
+    fi
+
+    # Only copy the package-lock.json if it differs from the one we have
+    if ! cmp -s node_modules/.package-lock.json package-lock.json; then
+        message COPY package-lock.json
+        cp node_modules/.package-lock.json package-lock.json
+    fi
+
+    # We're now in a situation where:
+    #  - the checked out node_modules is equal to the gitlink in the index
+    #  - the package.json in the tree is equal to the one in node_modules
+    #  - ditto package-lock.json
+    exit 0
+}
+
+main() {
+    if [ $# = 0 ]; then
+        # don't list the "private" ones
+        echo 'This command requires a subcommand: remove checkout install push verify runtime-tar'
+        exit 1
+    fi
+
+    local fname
+    fname="$(printf 'cmd_%s' "$1" | tr '-' '_')"
+    if ! type -t "${fname}" | grep -q function; then
+        echo "Unknown subcommand '$1'"
+        exit 1
+    fi
+
+    shift
+    [ -n "${quiet}" ] || set -x
+    "${fname}" "$@"
+}
+
+main "$@"

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "requires": {
+    "cockpit": "337"
+  },
+  "menu": {
+    "index": {
+      "label": "Hardware Monitor",
+      "path": "index.html",
+      "order": 65
+    }
+  }
+}
