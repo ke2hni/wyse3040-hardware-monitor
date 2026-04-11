@@ -48,6 +48,7 @@ To remove the plugin:
 
 ```bash
 sudo rm -rf /usr/local/share/cockpit/wyse3040-monitor
+'''
 
 ## Features
 
@@ -81,6 +82,7 @@ To remove the plugin:
 
 ```bash
 sudo rm -f ~/.local/share/cockpit/wyse3040-monitor
+'''
 
 ## Status
 
