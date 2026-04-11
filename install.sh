@@ -49,6 +49,11 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
+if [[ ! -d node_modules ]]; then
+    echo "Installing Node.js packages..."
+    npm install
+fi
+
 echo "Building ${PLUGIN_NAME}..."
 make
 
