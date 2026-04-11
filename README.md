@@ -42,6 +42,13 @@ sudo cp -r dist/* /usr/local/share/cockpit/wyse3040-monitor/
 
 Then refresh Cockpit or reboot.
 
+## Removal / Uninstall
+
+To remove the plugin:
+
+```bash
+sudo rm -rf /usr/local/share/cockpit/wyse3040-monitor
+
 ## Features
 
 - Live CPU / SoC temperature monitoring
@@ -66,6 +73,14 @@ make
 mkdir -p ~/.local/share/cockpit
 ln -s $(pwd)/dist ~/.local/share/cockpit/wyse3040-monitor
 ```
+
+## Removal / Uninstall
+
+For development use:
+To remove the plugin:
+
+```bash
+sudo rm -f ~/.local/share/cockpit/wyse3040-monitor
 
 ## Status
 
