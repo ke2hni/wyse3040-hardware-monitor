@@ -460,7 +460,7 @@ async function readFastMonitorData(currentUsb: UsbStorageState): Promise<Monitor
 }
 
 async function readUsbStorageData(): Promise<UsbStorageState> {
-    const lsblkJson = await run("lsblk -J -o NAME,MODEL,SIZE,TYPE,TRAN,MOUNTPOINT,FSTYPE");
+    const lsblkJson = await run("lsblk -b -J -o NAME,MODEL,SIZE,TYPE,TRAN,MOUNTPOINT,FSTYPE");
     const usbDevices = parseUsbDevices(lsblkJson);
     const first = usbDevices[0];
 
@@ -488,7 +488,7 @@ async function readUsbStorageData(): Promise<UsbStorageState> {
     return {
         present: "Yes",
         model: first.model || "--",
-        capacity: first.size || "--",
+        capacity: formatBytesDecimal(first.size || ""),
         freeSpace,
         devicePath: first.name ? `/dev/${first.name}` : "--",
         mountedAt: first.mountpoint || "--",
