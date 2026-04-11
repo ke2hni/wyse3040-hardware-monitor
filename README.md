@@ -1,3 +1,5 @@
+<img width="1600" height="900" alt="Screenshot 2026-04-11 160543" src="https://github.com/user-attachments/assets/da683132-c9e3-4b1b-92c2-4bdccc3119fb" />
+<img width="1600" height="900" alt="Screenshot 2026-04-11 160601" src="https://github.com/user-attachments/assets/3ab737fd-4b1a-4bca-aed2-b5aa6044bfcf" />
 # Wyse 3040 Hardware Monitor (Cockpit Plugin)
 
 Hardware monitoring plugin for the Dell Wyse 3040 Thin Client, built for Cockpit.
