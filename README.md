@@ -15,8 +15,8 @@ The installer verifies the hardware before installing.
 Clone the repo and run the installer:
 
 ```bash
-git clone https://github.com/ke2hni/wyse3040-monitor.git
-cd wyse3040-monitor
+git clone https://github.com/ke2hni/wyse3040-hardware-monitor.git
+cd wyse3040-hardware-monitor
 sudo ./install.sh
 ```
 
@@ -64,7 +64,7 @@ For development use:
 ```bash
 make
 mkdir -p ~/.local/share/cockpit
-ln -s /path/to/wyse3040-monitor/dist ~/.local/share/cockpit/wyse3040-monitor
+ln -s $(pwd)/dist ~/.local/share/cockpit/wyse3040-monitor
 ```
 
 ## Status
