@@ -5,8 +5,6 @@
  */
 import React, { useEffect, useState } from 'react';
 import cockpit from "cockpit";
-/* import "./app.scss";
- */
 
 /*
  * Main Cockpit/React UI dependencies reused from the Pi 5 monitor layout.
@@ -459,6 +457,45 @@ async function readFastMonitorData(currentUsb: UsbStorageState): Promise<Monitor
     };
 }
 
+async function readThermalData(): Promise<ThermalState> {
+    const output = await run(`
+for z in /sys/class/thermal/thermal_zone*; do
+    printf '%s|' "$(cat "$z/type" 2>/dev/null)";
+    cat "$z/temp" 2>/dev/null;
+done
+
+for f in /sys/class/hwmon/hwmon*/temp*_label; do
+    [ -r "$f" ] || continue;
+    label=$(cat "$f" 2>/dev/null);
+    case "$label" in
+        'Core 0'|'Core 1'|'Core 2'|'Core 3')
+            base=$(printf '%s\\n' "$f" | sed 's/_label$//');
+            printf '%s|' "$label";
+            cat "$base"_input 2>/dev/null
+        ;;
+    esac;
+done
+`);
+
+    const lines = output.split("\n");
+
+    const thermalLines: string[] = [];
+    const coreLines: string[] = [];
+
+    for (const line of lines) {
+        if (line.includes("Core ")) {
+            coreLines.push(line);
+        } else {
+            thermalLines.push(line);
+        }
+    }
+
+    return parseTemps(
+        thermalLines.join("\n"),
+        coreLines.join("\n")
+    );
+}
+
 async function readUsbStorageData(): Promise<UsbStorageState> {
     const lsblkJson = await run("lsblk -b -J -o NAME,MODEL,SIZE,TYPE,TRAN,MOUNTPOINT,FSTYPE");
     const usbDevices = parseUsbDevices(lsblkJson);
@@ -518,91 +555,133 @@ export const Application = () => {
         });
 
     /*
-     * Fast live refresh loop for temps/system/root, slower loop for USB inventory.
+     * Live refresh loop for temps/system/root and USB inventory.
+     * Uses one Pi-style refresh loop, but does not let the USB inventory read
+     * block the Online/Offline heartbeat.
      */
     useEffect(() => {
         let cancelled = false;
-        let lastSnapshot = "";
-        let stallTimer: number | undefined;
+        let fullRefreshTimer: number | undefined;
+        let thermalRefreshTimer: number | undefined;
+        let offlineTimer: number | undefined;
         let usbState: UsbStorageState = defaultMonitorState().usbStorage;
+        let startupComplete = false;
 
         const markOnline = () => {
             if (cancelled) return;
+
             setLiveDataOnline(true);
 
-            if (stallTimer !== undefined) {
-                window.clearTimeout(stallTimer);
+            if (offlineTimer !== undefined) {
+                window.clearTimeout(offlineTimer);
             }
 
-            stallTimer = window.setTimeout(() => {
+            if (!startupComplete) {
+                return;
+            }
+
+            offlineTimer = window.setTimeout(() => {
                 if (!cancelled) {
                     setLiveDataOnline(false);
                 }
-            }, 2500);
+            }, 3000);
         };
 
-        const fastLoop = async (): Promise<void> => {
-            try {
-                const data = await readFastMonitorData(usbState);
-                if (cancelled) return;
+        const scheduleThermalNext = (delay: number) => {
+            if (cancelled) return;
 
-                const snapshot = JSON.stringify(data);
-                if (snapshot !== lastSnapshot) {
-                    lastSnapshot = snapshot;
-                    setMonitor(data);
-                }
-
-                markOnline();
-
-                window.setTimeout(() => {
-                    if (!cancelled) {
-                        fastLoop().catch(() => undefined);
-                    }
-                }, 250);
-            } catch {
-                if (cancelled) return;
-
-                setLiveDataOnline(false);
-
-                window.setTimeout(() => {
-                    if (!cancelled) {
-                        fastLoop().catch(() => undefined);
-                    }
-                }, 1000);
+            if (thermalRefreshTimer !== undefined) {
+                window.clearTimeout(thermalRefreshTimer);
             }
+
+            thermalRefreshTimer = window.setTimeout(() => {
+                if (!cancelled) {
+                    refreshThermalLoop().catch(() => undefined);
+                }
+            }, delay);
         };
 
-        const usbLoop = async (): Promise<void> => {
+        const refreshUsbState = async () => {
             try {
-                usbState = await readUsbStorageData();
+                const nextUsbState = await readUsbStorageData();
                 if (cancelled) return;
+
+                usbState = nextUsbState;
 
                 setMonitor(prev => ({
                     ...prev,
                     boot: {
                         ...prev.boot,
-                        usbStoragePresent: usbState.present,
+                        usbStoragePresent: nextUsbState.present,
                     },
-                    usbStorage: usbState,
+                    usbStorage: nextUsbState,
                 }));
             } catch {
                 // keep prior USB state on errors
             }
-
-            window.setTimeout(() => {
-                if (!cancelled) {
-                    usbLoop().catch(() => undefined);
-                }
-            }, 5000);
         };
 
-        usbLoop().catch(() => undefined);
-        fastLoop().catch(() => undefined);
+        const refreshAllData = async () => {
+            await refreshUsbState();
+
+            const data = await readFastMonitorData(usbState);
+            if (cancelled) return;
+
+            setMonitor(data);
+            startupComplete = true;
+        };
+
+        const refreshThermalLoop = async (): Promise<void> => {
+            const cycleStartedAt = Date.now();
+
+            try {
+                const thermal = await readThermalData();
+                if (cancelled) return;
+
+                setMonitor(prev => ({
+                    ...prev,
+                    thermal,
+                }));
+
+                markOnline();
+
+                const elapsed = Date.now() - cycleStartedAt;
+                scheduleThermalNext(Math.max(0, 2000 - elapsed));
+            } catch {
+                if (cancelled) return;
+
+                setLiveDataOnline(false);
+                scheduleThermalNext(3000);
+            }
+        };
+
+        refreshThermalLoop().catch(() => undefined);
+
+        refreshAllData()
+                .then(() => {
+                    if (!cancelled) {
+                        markOnline();
+                    }
+                })
+                .catch(() => {
+                    if (!cancelled) {
+                        startupComplete = true;
+                    }
+                });
 
         return () => {
             cancelled = true;
-            if (stallTimer !== undefined) {
-                window.clearTimeout(stallTimer);
+
+            if (fullRefreshTimer !== undefined) {
+                window.clearTimeout(fullRefreshTimer);
+            }
+
+            if (thermalRefreshTimer !== undefined) {
+                window.clearTimeout(thermalRefreshTimer);
+            }
+
+            if (offlineTimer !== undefined) {
+                window.clearTimeout(offlineTimer);
             }
         };
     }, []);
@@ -639,7 +718,7 @@ export const Application = () => {
                             <FlexItem flex={{ default: "flex_1" }}>
                                 <Title headingLevel="h1">Dell Wyse 3040 Hardware Monitor</Title>
                                 <Content component={ContentVariants.p}>
-                                    Ver. 1.4 - April 2026
+                                    Ver. 1.8 - April 17, 2026
                                 </Content>
                             </FlexItem>
 
@@ -650,7 +729,7 @@ export const Application = () => {
                                 >
                                     <CardBody>
                                         <Title headingLevel="h3">
-                                            <span>Live Sensor Data</span>
+                                            <span>Sensor Data</span>
                                             <br />
                                             <span>{liveDataOnline ? "Online" : "Offline"}</span>
                                         </Title>
