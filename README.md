@@ -15,6 +15,8 @@ The installer verifies the hardware before installing.
 Clone the repo and run the installer:
 
 ```bash
+sudo apt update
+sudo apt install -y git
 git clone https://github.com/ke2hni/wyse3040-hardware-monitor.git
 cd wyse3040-hardware-monitor
 sudo ./install.sh
