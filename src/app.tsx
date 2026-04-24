@@ -718,7 +718,7 @@ export const Application = () => {
                             <FlexItem flex={{ default: "flex_1" }}>
                                 <Title headingLevel="h1">Dell Wyse 3040 Hardware Monitor</Title>
                                 <Content component={ContentVariants.p}>
-                                    Ver. 1.8 - April 17, 2026
+                                    Ver. 2.0 - April 23, 2026
                                 </Content>
                             </FlexItem>
 
@@ -731,7 +731,7 @@ export const Application = () => {
                                         <Title headingLevel="h3">
                                             <span>Sensor Data</span>
                                             <br />
-                                            <span>{liveDataOnline ? "Online" : "Offline"}</span>
+                                            <span>{liveDataOnline ? "Online" : "Collecting Data"}</span>
                                         </Title>
                                     </CardBody>
                                 </Card>

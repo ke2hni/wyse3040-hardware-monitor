@@ -70,9 +70,19 @@
 
 /*
  * Shared compact-card content alignment and card label sizing.
+ * Applies only to the monitor value cards inside Gallery sections.
  */
-.pi-card-service-like .pf-v6-c-card.pf-m-compact > .pf-v6-c-card__body {
+.pi-card-service-like .pf-v6-l-gallery > .pf-v6-c-card.pf-m-compact > .pf-v6-c-card__body {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 8rem;
   text-align: center;
+}
+
+.pi-card-service-like .pf-v6-l-gallery > .pf-v6-c-card.pf-m-compact > .pf-v6-c-card__body > .pf-v6-l-flex {
+  width: 100%;
 }
 
 .pi-card-label {
