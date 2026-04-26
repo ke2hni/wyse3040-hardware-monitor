@@ -1,5 +1,7 @@
 # Wyse 3040 Hardware Monitor (Cockpit Plugin)
 
+![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%205-blue).
+
 Hardware monitoring plugin for the Dell Wyse 3040 Thin Client, built for Cockpit.
 
 Displays real-time system data including temperatures, storage, system load, and overall status with dynamic visual indicators.
