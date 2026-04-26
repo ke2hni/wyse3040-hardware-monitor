@@ -2,17 +2,11 @@
 
 Hardware monitoring plugin for the Dell Wyse 3040 Thin Client, built for Cockpit.
 
-Displays real-time system data including temperatures, storage, load, and system status with dynamic color indicators.
+Displays real-time system data including temperatures, storage, system load, and overall status with dynamic visual indicators.
 
-## Supported Hardware
+---
 
-- Dell Wyse 3040 Thin Client
-
-The installer verifies the hardware before installing.
-
-## Quick Install (Recommended)
-
-Clone the repo and run the installer:
+## 🚀 Install (Recommended)
 
 ```bash
 sudo apt update
@@ -23,18 +17,64 @@ sudo ./install.sh
 ```
 
 The installer will:
-- verify system compatibility
-- install required dependencies if missing
+- verify hardware compatibility (Wyse 3040 only)
+- install required dependencies (if missing)
 - build the plugin
-- install the plugin into Cockpit
+- install it into Cockpit
 
 After install:
-- refresh your browser, or
+- refresh your browser
+or
 - reboot if it does not appear
 
-## Manual Install
+---
 
-If you prefer not to use the installer:
+## 🔄 Upgrade
+
+```bash
+cd ~/wyse3040-hardware-monitor
+git pull
+sudo ./install.sh
+```
+
+---
+
+## 🗑️ Uninstall
+
+```bash
+sudo rm -rf /usr/local/share/cockpit/wyse3040-monitor
+```
+
+---
+
+## ⚙️ Features
+
+- Live CPU / SoC temperature monitoring
+- Dynamic color-coded thermal status (Cool / Normal / Warm / Hot)
+- Storage detection with readable size formatting
+- System load monitoring
+- Clean UI compatible with Cockpit Default / Light / Dark themes
+- Designed specifically for Wyse 3040 hardware
+
+---
+
+## 🖥️ Supported Hardware
+
+- Dell Wyse 3040 Thin Client
+
+The installer will prevent installation on unsupported systems.
+
+---
+
+## 📝 Notes
+
+- No background services are installed
+- Does not modify or restart Cockpit services
+- Uses a simple direct-install method (no packaging required)
+
+---
+
+## 🛠️ Manual Install (Optional)
 
 ```bash
 make
@@ -44,32 +84,9 @@ sudo cp -r dist/* /usr/local/share/cockpit/wyse3040-monitor/
 
 Then refresh Cockpit or reboot.
 
-## Removal / Uninstall
+---
 
-To remove the plugin:
-
-```bash
-sudo rm -rf /usr/local/share/cockpit/wyse3040-monitor
-```
-
-## Features
-
-- Live CPU / SoC temperature monitoring
-- Dynamic color-changing borders based on thermal thresholds
-- Storage detection with readable size formatting
-- System load monitoring
-- Fully compatible with Cockpit Default / Light / Dark themes
-- Designed specifically for Wyse 3040 hardware
-
-## Notes
-
-- This plugin is hardware-specific and will not install on unsupported systems
-- Uses a simple direct-install method (no RPM packaging required)
-- Does not modify or restart Cockpit services
-
-## Development (Optional)
-
-For development use:
+## 🧪 Development (Optional)
 
 ```bash
 make
@@ -77,16 +94,15 @@ mkdir -p ~/.local/share/cockpit
 ln -s $(pwd)/dist ~/.local/share/cockpit/wyse3040-monitor
 ```
 
-## Removal / Uninstall
-
-For development use:
-To remove the plugin:
+To remove dev install:
 
 ```bash
-sudo rm -f ~/.local/share/cockpit/wyse3040-monitor
+rm -f ~/.local/share/cockpit/wyse3040-monitor
 ```
 
-## Status
+---
+
+## 📊 Status
 
 Stable and tested:
 - survives reboot
@@ -94,5 +110,10 @@ Stable and tested:
 - UI fully functional
 - lint checks passing
 
-<img width="1600" height="900" alt="Screenshot 2026-04-11 160543" src="https://github.com/user-attachments/assets/da683132-c9e3-4b1b-92c2-4bdccc3119fb" />
-<img width="1600" height="900" alt="Screenshot 2026-04-11 160601" src="https://github.com/user-attachments/assets/3ab737fd-4b1a-4bca-aed2-b5aa6044bfcf" />
+---
+
+## 📸 Screenshots
+
+![Screenshot](https://github.com/user-attachments/assets/da683132-c9e3-4b1b-92c2-4bdccc3119fb)
+
+![Screenshot](https://github.com/user-attachments/assets/3ab737fd-4b1a-4bca-aed2-b5aa6044bfcf)
