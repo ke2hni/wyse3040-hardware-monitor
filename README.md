@@ -1,6 +1,6 @@
 # Wyse 3040 Hardware Monitor (Cockpit Plugin)
 
-![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%205-blue)
+![Dell Wyse 3040](https://img.shields.io/badge/Dell-Wyse%203040-blue)
 ![AllStarLink](https://img.shields.io/badge/AllStarLink%203-Compatible-purple)
 ![Cockpit](https://img.shields.io/badge/Cockpit-Plugin-green)
 ![Status](https://img.shields.io/badge/Status-Stable-brightgreen)
